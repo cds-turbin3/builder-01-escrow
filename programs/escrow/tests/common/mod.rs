@@ -4,6 +4,7 @@
 //! each escrow instruction with its accounts struct, the scenario constants,
 //! and the `setup` fixture that builds a ready-to-use escrow scenario.
 
+// NOTE (compilation dimension)
 // This module is compiled into all three test binaries, and not every binary
 // reads every bundle field (e.g. test_refund never touches the taker ATAs).
 // Silence the resulting per-binary dead-code noise for this scaffolding module.
@@ -14,6 +15,9 @@ use anchor_lang::solana_program::system_program;
 use anchor_litesvm::{AnchorContext, BuildableIx, Keypair, Signer, TestHelpers};
 use spl_associated_token_account::get_associated_token_address;
 
+//NOTE higher abstraction - allows tester to model their system and gain
+//compile-time type safety
+//
 /// One escrow scenario's worth of pubkeys: the "address book" threaded through
 /// `make`, `take`, and `refund`.
 #[derive(Copy, Clone)]
@@ -33,6 +37,9 @@ pub struct EscrowBundle {
     pub system_program: Pubkey,
 }
 
+//NOTE (DX dimension)
+//explain orphan rule -- this likely fits anchor-liteSVM
+//https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence
 impl From<EscrowBundle> for escrow::accounts::Make {
     fn from(b: EscrowBundle) -> Self {
         Self {
