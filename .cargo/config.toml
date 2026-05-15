@@ -1,0 +1,4 @@
+[alias]
+t = "test --tests"
+tt = "test --tests -- --no-capture"
+
