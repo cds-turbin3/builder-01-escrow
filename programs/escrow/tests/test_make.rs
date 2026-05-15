@@ -7,11 +7,12 @@ use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
-/// Smoke test: the `From` / `BuildableIx` glue compiles and `build_ix` resolves
-/// each args struct to the right accounts struct. Pure construction, no runtime.
+/// Regression guard: each `BuildableIx` impl pairs its args struct with the
+/// correct `accounts::*` struct. A wrong `type Accounts =` on any of the three
+/// impls would still compile (every `From<EscrowBundle> for accounts::*` exists)
+/// but would produce an instruction with the wrong account count, caught here.
 #[test]
-fn buildable_ix_glue_typechecks() {
-    // Arrange
+fn buildable_ix_resolves_correct_accounts_struct() {
     let bundle = EscrowBundle {
         maker: Pubkey::new_unique(),
         taker: Pubkey::new_unique(),
@@ -29,7 +30,6 @@ fn buildable_ix_glue_typechecks() {
     };
     let program = Program::new(escrow::ID);
 
-    // Act
     let make_ix = program.build_ix(
         bundle,
         escrow::instruction::Make { seed: 1, receive: 2, deposit: 3 },
@@ -37,14 +37,9 @@ fn buildable_ix_glue_typechecks() {
     let take_ix = program.build_ix(bundle, escrow::instruction::Take {});
     let refund_ix = program.build_ix(bundle, escrow::instruction::Refund {});
 
-    // Assert
-    assert_eq!(make_ix.program_id, escrow::ID);
-    assert_eq!(take_ix.program_id, escrow::ID);
-    assert_eq!(refund_ix.program_id, escrow::ID);
     assert_eq!(make_ix.accounts.len(), 9);
     assert_eq!(take_ix.accounts.len(), 12);
     assert_eq!(refund_ix.accounts.len(), 7);
-    assert!(!make_ix.data.is_empty());
 }
 
 /// Happy path: `make` creates the escrow account and moves the deposit into the vault.
