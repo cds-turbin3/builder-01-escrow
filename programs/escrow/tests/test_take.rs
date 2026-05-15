@@ -67,5 +67,5 @@ fn take_rejects_wrong_vault() {
         .expect("take transaction should submit");
 
     // Assert
-    result.assert_failure();
+    result.assert_anchor_error("AccountNotInitialized");
 }

@@ -66,5 +66,5 @@ fn refund_rejects_wrong_maker() {
         .expect("refund transaction should submit");
 
     // Assert
-    result.assert_failure();
+    result.assert_anchor_error("ConstraintTokenOwner");
 }
