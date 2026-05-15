@@ -33,6 +33,7 @@ fn take_swaps_tokens_and_closes_vault() {
 
     // Assert
     result.assert_success();
+    result.print_logs();
     ctx.svm.assert_token_balance(&bundle.taker_ata_a, DEPOSIT);
     ctx.svm.assert_token_balance(&bundle.maker_ata_b, RECEIVE);
     ctx.svm.assert_token_balance(&bundle.taker_ata_b, 0);
@@ -65,6 +66,7 @@ fn take_rejects_wrong_vault() {
     let result = ctx
         .execute_instruction(take_ix, &[&taker])
         .expect("take transaction should submit");
+    result.print_logs();
 
     // Assert
     result.assert_anchor_error("AccountNotInitialized");

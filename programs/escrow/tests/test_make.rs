@@ -63,6 +63,7 @@ fn make_creates_escrow_and_funds_vault() {
 
     // Assert
     result.assert_success();
+    result.print_logs();
     let escrow_acct: escrow::Escrow =
         ctx.get_account(&bundle.escrow).expect("escrow account should exist");
     assert_eq!(escrow_acct.seed, SEED);
@@ -91,6 +92,7 @@ fn make_rejects_wrong_escrow_pda() {
     let result = ctx
         .execute_instruction(ix, &[&maker])
         .expect("make transaction should submit");
+    result.print_logs();
 
     // Assert
     result.assert_anchor_error("ConstraintSeeds");

@@ -33,6 +33,7 @@ fn refund_returns_deposit_and_closes_escrow() {
 
     // Assert
     result.assert_success();
+    result.print_logs();
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, DEPOSIT);
     ctx.svm.assert_account_closed(&bundle.vault);
     ctx.svm.assert_account_closed(&bundle.escrow);
@@ -64,6 +65,7 @@ fn refund_rejects_wrong_maker() {
     let result = ctx
         .execute_instruction(refund_ix, &[&maker])
         .expect("refund transaction should submit");
+    result.print_logs();
 
     // Assert
     result.assert_anchor_error("ConstraintTokenOwner");
