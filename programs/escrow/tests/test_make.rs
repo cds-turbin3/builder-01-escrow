@@ -75,3 +75,25 @@ fn make_creates_escrow_and_funds_vault() {
     ctx.svm.assert_token_balance(&bundle.vault, DEPOSIT);
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, 0);
 }
+
+/// Negative path: a wrong escrow PDA must be rejected by Anchor's seeds constraint.
+#[test]
+fn make_rejects_wrong_escrow_pda() {
+    // Arrange
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+    let wrong_escrow = Pubkey::new_unique();
+
+    // Act
+    let ix = ctx.program().build_ix_with(
+        bundle,
+        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+        |a| a.escrow = wrong_escrow,
+    );
+    let result = ctx
+        .execute_instruction(ix, &[&maker])
+        .expect("make transaction should submit");
+
+    // Assert
+    result.assert_anchor_error("ConstraintSeeds");
+}
