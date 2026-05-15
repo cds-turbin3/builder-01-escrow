@@ -13,7 +13,9 @@
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::solana_program::system_program;
 use anchor_litesvm::{AnchorContext, BuildableIx, Keypair, Signer, TestHelpers};
+use escrow::msg;
 use spl_associated_token_account::get_associated_token_address;
+use anchor_litesvm::TransactionResult;
 
 //NOTE higher abstraction - allows tester to model their system and gain
 //compile-time type safety
@@ -179,4 +181,18 @@ pub fn setup(ctx: &mut AnchorContext, seed: u64) -> (EscrowBundle, Keypair, Keyp
     };
 
     (bundle, maker, taker)
+}
+
+
+// test helper
+pub fn pretty_log(tx: &TransactionResult, test_name: &str) {
+    msg!("### {}\n", test_name);
+    msg!("<details><summary>Logs</summary>\n\n");
+    msg!("\n```console");
+    tx.print_logs();
+    msg!("\n```\n</details>");
+
+    msg!("\n```console");
+    tx.print_logs_structured();
+    msg!("\n```");
 }

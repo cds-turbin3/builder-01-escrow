@@ -3,8 +3,7 @@
 mod common;
 
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey};
-use common::{DEPOSIT, RECEIVE, SEED};
-
+use common::{DEPOSIT, RECEIVE, SEED, pretty_log};
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
 /// Happy path: `refund` returns the deposit to the maker and closes the vault
@@ -33,7 +32,9 @@ fn refund_returns_deposit_and_closes_escrow() {
 
     // Assert
     result.assert_success();
-    result.print_logs();
+    pretty_log(&result, "refund_returns_deposit_and_closes_escrow");
+    // result.print_logs();
+    // result.print_logs_structured();
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, DEPOSIT);
     ctx.svm.assert_account_closed(&bundle.vault);
     ctx.svm.assert_account_closed(&bundle.escrow);
@@ -65,7 +66,9 @@ fn refund_rejects_wrong_maker() {
     let result = ctx
         .execute_instruction(refund_ix, &[&maker])
         .expect("refund transaction should submit");
-    result.print_logs();
+    pretty_log(&result, "refund_rejects_wrong_maker");
+    // result.print_logs();
+    // result.print_logs_structured();
 
     // Assert
     result.assert_anchor_error("ConstraintTokenOwner");

@@ -3,7 +3,7 @@
 mod common;
 
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey};
-use common::{DEPOSIT, RECEIVE, SEED};
+use common::{DEPOSIT, RECEIVE, SEED, pretty_log};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -33,7 +33,9 @@ fn take_swaps_tokens_and_closes_vault() {
 
     // Assert
     result.assert_success();
-    result.print_logs();
+    pretty_log(&result, "take_swaps_tokens_and_closes_vault");
+    // result.print_logs();
+    // result.print_logs_structured();
     ctx.svm.assert_token_balance(&bundle.taker_ata_a, DEPOSIT);
     ctx.svm.assert_token_balance(&bundle.maker_ata_b, RECEIVE);
     ctx.svm.assert_token_balance(&bundle.taker_ata_b, 0);
@@ -66,7 +68,9 @@ fn take_rejects_wrong_vault() {
     let result = ctx
         .execute_instruction(take_ix, &[&taker])
         .expect("take transaction should submit");
-    result.print_logs();
+    pretty_log(&result, "take_rejects_wrong_vault");
+    // result.print_logs();
+    // result.print_logs_structured();
 
     // Assert
     result.assert_anchor_error("AccountNotInitialized");

@@ -2,8 +2,8 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Program, Pubkey};
-use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Program, Pubkey, TransactionResult};
+use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED, pretty_log};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -63,7 +63,9 @@ fn make_creates_escrow_and_funds_vault() {
 
     // Assert
     result.assert_success();
-    result.print_logs();
+    pretty_log(&result, "make_creates_escrow_and_funds_vault");
+    // result.print_logs();
+    // result.print_logs_structured();
     let escrow_acct: escrow::Escrow =
         ctx.get_account(&bundle.escrow).expect("escrow account should exist");
     assert_eq!(escrow_acct.seed, SEED);
@@ -92,7 +94,9 @@ fn make_rejects_wrong_escrow_pda() {
     let result = ctx
         .execute_instruction(ix, &[&maker])
         .expect("make transaction should submit");
-    result.print_logs();
+    pretty_log(&result, "make_rejects_wrong_escrow_pda");
+    // result.print_logs();
+    // result.print_logs_structured();
 
     // Assert
     result.assert_anchor_error("ConstraintSeeds");
