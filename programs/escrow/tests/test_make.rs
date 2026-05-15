@@ -37,8 +37,11 @@ fn buildable_ix_resolves_correct_accounts_struct() {
     let take_ix = program.build_ix(bundle, escrow::instruction::Take {});
     let refund_ix = program.build_ix(bundle, escrow::instruction::Refund {});
 
+    // Make: maker, mint_a, mint_b, maker_ata_a, escrow, vault, token_program, ata_program, system_program
     assert_eq!(make_ix.accounts.len(), 9);
+    // Take: taker, maker, mint_a, mint_b, taker_ata_a, taker_ata_b, maker_ata_b, escrow, vault, token_program, ata_program, system_program
     assert_eq!(take_ix.accounts.len(), 12);
+    // Refund: maker, mint_a, maker_ata_a, escrow, vault, token_program, system_program
     assert_eq!(refund_ix.accounts.len(), 7);
 }
 
