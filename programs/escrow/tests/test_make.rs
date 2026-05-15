@@ -2,8 +2,10 @@
 
 mod common;
 
-use anchor_litesvm::{Program, Pubkey};
-use common::EscrowBundle;
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Program, Pubkey};
+use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED};
+
+const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
 /// Smoke test: the `From` / `BuildableIx` glue compiles and `build_ix` resolves
 /// each args struct to the right accounts struct. Pure construction, no runtime.
@@ -43,4 +45,33 @@ fn buildable_ix_glue_typechecks() {
     assert_eq!(take_ix.accounts.len(), 12);
     assert_eq!(refund_ix.accounts.len(), 7);
     assert!(!make_ix.data.is_empty());
+}
+
+/// Happy path: `make` creates the escrow account and moves the deposit into the vault.
+#[test]
+fn make_creates_escrow_and_funds_vault() {
+    // Arrange
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+
+    // Act
+    let ix = ctx.program().build_ix(
+        bundle,
+        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+    );
+    let result = ctx
+        .execute_instruction(ix, &[&maker])
+        .expect("make transaction should submit");
+
+    // Assert
+    result.assert_success();
+    let escrow_acct: escrow::Escrow =
+        ctx.get_account(&bundle.escrow).expect("escrow account should exist");
+    assert_eq!(escrow_acct.seed, SEED);
+    assert_eq!(escrow_acct.maker, bundle.maker);
+    assert_eq!(escrow_acct.mint_a, bundle.mint_a);
+    assert_eq!(escrow_acct.mint_b, bundle.mint_b);
+    assert_eq!(escrow_acct.receive, RECEIVE);
+    ctx.svm.assert_token_balance(&bundle.vault, DEPOSIT);
+    ctx.svm.assert_token_balance(&bundle.maker_ata_a, 0);
 }
