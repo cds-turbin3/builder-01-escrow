@@ -6,5 +6,4 @@ pub enum ErrorCode {
     EscrowExpired,
     #[msg("Escrow has not expired")]
     EscrowNotExpired,
-
 }

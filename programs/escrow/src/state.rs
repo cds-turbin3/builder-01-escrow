@@ -1,6 +1,5 @@
 pub use anchor_lang::prelude::*;
 
-
 #[derive(InitSpace)]
 #[account(discriminator = 1)]
 pub struct Escrow {
@@ -13,4 +12,4 @@ pub struct Escrow {
     pub bump: u8,
 }
 
-pub const EXPIRY_PERIOD_IN_SECONDS: i64 = 90 * 24 * 60 * 60; 
+pub const EXPIRY_PERIOD_IN_SECONDS: i64 = 90 * 24 * 60 * 60;

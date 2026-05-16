@@ -3,7 +3,7 @@
 mod common;
 
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
-use common::{DEPOSIT, RECEIVE, SEED, pretty_log};
+use common::{pretty_log, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -19,7 +19,11 @@ fn take_and_close_succeeds_late_in_window() {
     // Arrange: make (the escrow must exist and be funded before it can be taken)
     let make_ix = ctx.program().build_ix(
         bundle,
-        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+        escrow::instruction::Make {
+            seed: SEED,
+            receive: RECEIVE,
+            deposit: DEPOSIT,
+        },
     );
     ctx.execute_instruction(make_ix, &[&maker])
         .expect("make transaction should submit")
@@ -53,7 +57,11 @@ fn take_and_close_fails_after_expiry() {
     // Arrange: make (the escrow must exist and be funded before it can be taken)
     let make_ix = ctx.program().build_ix(
         bundle,
-        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+        escrow::instruction::Make {
+            seed: SEED,
+            receive: RECEIVE,
+            deposit: DEPOSIT,
+        },
     );
     ctx.execute_instruction(make_ix, &[&maker])
         .expect("make transaction should submit")
@@ -84,7 +92,11 @@ fn take_rejects_wrong_vault() {
     // Arrange: make
     let make_ix = ctx.program().build_ix(
         bundle,
-        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+        escrow::instruction::Make {
+            seed: SEED,
+            receive: RECEIVE,
+            deposit: DEPOSIT,
+        },
     );
     ctx.execute_instruction(make_ix, &[&maker])
         .expect("make transaction should submit")
@@ -92,11 +104,11 @@ fn take_rejects_wrong_vault() {
     let wrong_vault = Pubkey::new_unique();
 
     // Act
-    let take_ix = ctx.program().build_ix_with(
-        bundle,
-        escrow::instruction::Take {},
-        |a| a.vault = wrong_vault,
-    );
+    let take_ix = ctx
+        .program()
+        .build_ix_with(bundle, escrow::instruction::Take {}, |a| {
+            a.vault = wrong_vault
+        });
     let result = ctx
         .execute_instruction(take_ix, &[&taker])
         .expect("take transaction should submit");

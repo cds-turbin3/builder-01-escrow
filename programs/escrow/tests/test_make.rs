@@ -3,7 +3,7 @@
 mod common;
 
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Program, Pubkey, TransactionResult};
-use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED, pretty_log};
+use common::{pretty_log, EscrowBundle, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -32,7 +32,11 @@ fn buildable_ix_resolves_correct_accounts_struct() {
 
     let make_ix = program.build_ix(
         bundle,
-        escrow::instruction::Make { seed: 1, receive: 2, deposit: 3 },
+        escrow::instruction::Make {
+            seed: 1,
+            receive: 2,
+            deposit: 3,
+        },
     );
     let take_ix = program.build_ix(bundle, escrow::instruction::Take {});
     let refund_ix = program.build_ix(bundle, escrow::instruction::Refund {});
@@ -55,7 +59,11 @@ fn make_creates_escrow_and_funds_vault() {
     // Act
     let ix = ctx.program().build_ix(
         bundle,
-        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+        escrow::instruction::Make {
+            seed: SEED,
+            receive: RECEIVE,
+            deposit: DEPOSIT,
+        },
     );
     let result = ctx
         .execute_instruction(ix, &[&maker])
@@ -66,8 +74,9 @@ fn make_creates_escrow_and_funds_vault() {
     pretty_log(&result, "make_creates_escrow_and_funds_vault");
     // result.print_logs();
     // result.print_logs_structured();
-    let escrow_acct: escrow::Escrow =
-        ctx.get_account(&bundle.escrow).expect("escrow account should exist");
+    let escrow_acct: escrow::Escrow = ctx
+        .get_account(&bundle.escrow)
+        .expect("escrow account should exist");
     assert_eq!(escrow_acct.seed, SEED);
     assert_eq!(escrow_acct.maker, bundle.maker);
     assert_eq!(escrow_acct.mint_a, bundle.mint_a);
@@ -88,7 +97,11 @@ fn make_rejects_wrong_escrow_pda() {
     // Act
     let ix = ctx.program().build_ix_with(
         bundle,
-        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+        escrow::instruction::Make {
+            seed: SEED,
+            receive: RECEIVE,
+            deposit: DEPOSIT,
+        },
         |a| a.escrow = wrong_escrow,
     );
     let result = ctx
