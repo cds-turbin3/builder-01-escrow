@@ -57,6 +57,7 @@ pub struct Take<'info> {
         has_one = mint_a,
         has_one = mint_b,
         has_one = maker,
+        constraint = Clock::get()?.unix_timestamp <= escrow.expiry @ crate::error::ErrorCode::EscrowExpired
     ]]
     pub escrow: Account<'info, Escrow>,
 

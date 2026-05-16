@@ -58,6 +58,12 @@ impl<'info> Make<'info> {
             maker: self.maker.key(),
             mint_a: self.mint_a.key(),
             mint_b: self.mint_b.key(),
+            expiry: {
+                let clock = Clock::get()?;
+                let now = clock.unix_timestamp;
+                let ninety_days_seconds: i64 = 90 * 24 * 60 * 60; 
+                now + ninety_days_seconds
+            },
             receive,
             bump: bumps.escrow,
         });

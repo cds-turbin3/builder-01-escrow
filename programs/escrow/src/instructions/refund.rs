@@ -32,6 +32,8 @@ pub struct Refund<'info> {
         has_one = maker,
         seeds = [ESCROW_SEED, escrow.maker.as_ref(), escrow.seed.to_le_bytes().as_ref()],
         bump = escrow.bump,
+        constraint = Clock::get()?.unix_timestamp > escrow.expiry @ crate::error::ErrorCode::EscrowNotExpired
+
     ]]
     pub escrow: Account<'info, Escrow>,
 

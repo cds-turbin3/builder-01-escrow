@@ -3,7 +3,9 @@
 mod common;
 
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey};
-use common::{DEPOSIT, RECEIVE, SEED, pretty_log};
+use common::{DEPOSIT, RECEIVE, SEED, pretty_log, ndays_from_now};
+use anchor_lang::prelude::*;
+
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -11,7 +13,7 @@ const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 /// (`DEPOSIT` of mint_a), the maker should hold the asking price (`RECEIVE` of
 /// mint_b), and the vault should be closed.
 #[test]
-fn take_swaps_tokens_and_closes_vault() {
+fn take_and_close_succeeds_late_in_window() {
     // Arrange
     let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
     let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
@@ -26,6 +28,10 @@ fn take_swaps_tokens_and_closes_vault() {
         .assert_success();
 
     // Act
+    let mut clock = ctx.svm.get_sysvar::<Clock>();
+    clock.unix_timestamp = ndays_from_now(&ctx, 89);
+    ctx.svm.set_sysvar(&clock);
+    
     let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
     let result = ctx
         .execute_instruction(take_ix, &[&taker])
@@ -42,6 +48,38 @@ fn take_swaps_tokens_and_closes_vault() {
     ctx.svm.assert_account_closed(&bundle.vault);
 }
 
+#[test]
+fn take_and_close_fails_after_expiry() {
+    // Arrange
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
+
+    // Arrange: make (the escrow must exist and be funded before it can be taken)
+    let make_ix = ctx.program().build_ix(
+        bundle,
+        escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
+    );
+    ctx.execute_instruction(make_ix, &[&maker])
+        .expect("make transaction should submit")
+        .assert_success();
+
+    // Act
+    let mut clock = ctx.svm.get_sysvar::<Clock>();
+    clock.unix_timestamp = ndays_from_now(&ctx, 199);
+    ctx.svm.set_sysvar(&clock);
+
+    let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
+    let result = ctx
+        .execute_instruction(take_ix, &[&taker])
+        .expect("take transaction should submit");
+
+    // Assert
+    //
+    result.assert_anchor_error("EscrowExpired");
+    pretty_log(&result, "take_and_close_fails_after_expiry");
+    // result.print_logs();
+    // result.print_logs_structured();
+}
 /// Negative path: with a valid escrow in place, a wrong `vault` must be rejected.
 #[test]
 fn take_rejects_wrong_vault() {
