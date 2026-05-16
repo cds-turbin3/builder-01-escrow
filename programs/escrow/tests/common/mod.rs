@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use anchor_lang::prelude::Pubkey;
-use anchor_lang::solana_program::{system_program, clock::Clock};
+use anchor_lang::solana_program::system_program;
 use anchor_litesvm::{AnchorContext, BuildableIx, Keypair, Signer, TestHelpers};
 use escrow::msg;
 use spl_associated_token_account::get_associated_token_address;
@@ -197,7 +197,3 @@ pub fn pretty_log(tx: &TransactionResult, test_name: &str) {
     msg!("\n```");
 }
 
-pub fn ndays_from_now(ctx: &AnchorContext, days: i64) -> i64 {
-    let now = ctx.svm.get_sysvar::<Clock>().unix_timestamp;
-    now + days * 24 * 60 * 60
-}

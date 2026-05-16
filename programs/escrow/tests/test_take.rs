@@ -2,10 +2,8 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey};
-use common::{DEPOSIT, RECEIVE, SEED, pretty_log, ndays_from_now};
-use anchor_lang::prelude::*;
-
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
+use common::{DEPOSIT, RECEIVE, SEED, pretty_log};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -28,10 +26,8 @@ fn take_and_close_succeeds_late_in_window() {
         .assert_success();
 
     // Act
-    let mut clock = ctx.svm.get_sysvar::<Clock>();
-    clock.unix_timestamp = ndays_from_now(&ctx, 89);
-    ctx.svm.set_sysvar(&clock);
-    
+    ctx.svm.advance_days(89);
+
     let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
     let result = ctx
         .execute_instruction(take_ix, &[&taker])
@@ -64,9 +60,7 @@ fn take_and_close_fails_after_expiry() {
         .assert_success();
 
     // Act
-    let mut clock = ctx.svm.get_sysvar::<Clock>();
-    clock.unix_timestamp = ndays_from_now(&ctx, 199);
-    ctx.svm.set_sysvar(&clock);
+    ctx.svm.advance_days(199);
 
     let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
     let result = ctx

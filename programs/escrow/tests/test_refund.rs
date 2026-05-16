@@ -2,9 +2,9 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey};
-use common::{DEPOSIT, RECEIVE, SEED, pretty_log, ndays_from_now};
-use anchor_lang::prelude::*;
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
+use common::{DEPOSIT, RECEIVE, SEED, pretty_log};
+
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
 /// Happy path: `refund` returns the deposit to the maker and closes the vault
@@ -24,9 +24,7 @@ fn refund_returns_deposit_and_closes_escrow() {
         .expect("make transaction should submit")
         .assert_success();
 
-    let mut clock = ctx.svm.get_sysvar::<Clock>();
-    clock.unix_timestamp = ndays_from_now(&ctx, 199);
-    ctx.svm.set_sysvar(&clock);
+    ctx.svm.advance_days(199);
 
     // Act
     // `refund` declares no Signer; the maker signs only as the transaction fee payer.
@@ -62,9 +60,7 @@ fn refund_fails_before_expiry() {
         .expect("make transaction should submit")
         .assert_success();
 
-    let mut clock = ctx.svm.get_sysvar::<Clock>();
-    clock.unix_timestamp = ndays_from_now(&ctx, 19);
-    ctx.svm.set_sysvar(&clock);
+    ctx.svm.advance_days(19);
 
     // Act
     // `refund` declares no Signer; the maker signs only as the transaction fee payer.
@@ -96,9 +92,7 @@ fn refund_rejects_wrong_maker() {
         .expect("make transaction should submit")
         .assert_success();
 
-    let mut clock = ctx.svm.get_sysvar::<Clock>();
-    clock.unix_timestamp = ndays_from_now(&ctx, 199);
-    ctx.svm.set_sysvar(&clock);
+    ctx.svm.advance_days(199);
 
     let wrong_maker = Pubkey::new_unique();
 

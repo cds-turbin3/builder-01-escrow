@@ -1,4 +1,4 @@
-use crate::{Escrow, ESCROW_SEED};
+use crate::{Escrow, ESCROW_SEED, EXPIRY_PERIOD_IN_SECONDS};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{transfer_checked, TransferChecked};
@@ -61,8 +61,7 @@ impl<'info> Make<'info> {
             expiry: {
                 let clock = Clock::get()?;
                 let now = clock.unix_timestamp;
-                let ninety_days_seconds: i64 = 90 * 24 * 60 * 60; 
-                now + ninety_days_seconds
+                now + EXPIRY_PERIOD_IN_SECONDS // 90 days
             },
             receive,
             bump: bumps.escrow,

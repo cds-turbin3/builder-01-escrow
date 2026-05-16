@@ -12,3 +12,5 @@ pub struct Escrow {
     pub receive: u64,
     pub bump: u8,
 }
+
+pub const EXPIRY_PERIOD_IN_SECONDS: i64 = 90 * 24 * 60 * 60; 
