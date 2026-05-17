@@ -9,8 +9,10 @@ const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
 /// Regression guard: each `BuildableIx` impl pairs its args struct with the
 /// correct `accounts::*` struct. A wrong `type Accounts =` on any of the three
-/// impls would still compile (every `From<EscrowBundle> for accounts::*` exists)
-/// but would produce an instruction with the wrong account count, caught here.
+/// impls would still compile (every `From<EscrowBundle> for accounts::*` exists,
+/// so the type wiring stays valid) but would produce an instruction with the
+/// wrong account count, caught here. Uses fresh pubkeys rather than the `setup`
+/// fixture because we're inspecting the instruction shape, not executing it.
 #[test]
 fn buildable_ix_resolves_correct_accounts_struct() {
     let bundle = EscrowBundle {
@@ -41,6 +43,14 @@ fn buildable_ix_resolves_correct_accounts_struct() {
     let take_ix = program.build_ix(bundle, escrow::instruction::Take {});
     let refund_ix = program.build_ix(bundle, escrow::instruction::Refund {});
 
+    // TODO: this guard relies on account *count* as a proxy for "right
+    // accounts struct was selected"; a future refactor that happens to keep
+    // the counts equal would slip past it. A stronger check would compare the
+    // metas (pubkey + is_signer + is_writable) against a known-good fixture
+    // per instruction.
+    //
+    // The counts below are the expected number of AccountMetas Anchor emits
+    // for each Accounts struct (signer + named accounts + programs).
     // Make: maker, mint_a, mint_b, maker_ata_a, escrow, vault, token_program, ata_program, system_program
     assert_eq!(make_ix.accounts.len(), 9);
     // Take: taker, maker, mint_a, mint_b, taker_ata_a, taker_ata_b, maker_ata_b, escrow, vault, token_program, ata_program, system_program
@@ -74,6 +84,10 @@ fn make_creates_escrow_and_funds_vault() {
     pretty_log(&result, "make_creates_escrow_and_funds_vault");
     // result.print_logs();
     // result.print_logs_structured();
+    // Escrow account was created and populated from the instruction args
+    // (every field that round-trips through the program is checked here; if a
+    // future change shuffles fields in `state::Escrow`, this fixes the layout
+    // contract for `make`).
     let escrow_acct: escrow::Escrow = ctx
         .get_account(&bundle.escrow)
         .expect("escrow account should exist");
@@ -82,11 +96,18 @@ fn make_creates_escrow_and_funds_vault() {
     assert_eq!(escrow_acct.mint_a, bundle.mint_a);
     assert_eq!(escrow_acct.mint_b, bundle.mint_b);
     assert_eq!(escrow_acct.receive, RECEIVE);
+    // The full `DEPOSIT` moved from the maker's source ATA into the vault;
+    // checking both ends catches a `transfer` that fires with the wrong amount
+    // or wrong direction.
     ctx.svm.assert_token_balance(&bundle.vault, DEPOSIT);
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, 0);
 }
 
-/// Negative path: a wrong escrow PDA must be rejected by Anchor's seeds constraint.
+/// Negative path: a wrong escrow PDA must be rejected by Anchor's seeds
+/// constraint. We swap in a freshly-generated pubkey for `escrow` (so the
+/// `seeds = [...]` check on the account fails) while leaving everything else
+/// valid; the failure mode we expect is specifically `ConstraintSeeds`, not a
+/// generic deserialization or ownership error.
 #[test]
 fn make_rejects_wrong_escrow_pda() {
     // Arrange

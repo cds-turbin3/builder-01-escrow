@@ -7,8 +7,9 @@ use common::{pretty_log, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
-/// Happy path: `refund` returns the deposit to the maker and closes the vault
-/// and escrow accounts.
+/// Happy path: once the escrow has expired, `refund` returns the deposit to
+/// the maker and closes both the vault and the escrow accounts. This is the
+/// maker's recovery path when no taker shows up before expiry.
 #[test]
 fn refund_returns_deposit_and_closes_escrow() {
     // Arrange
@@ -28,6 +29,8 @@ fn refund_returns_deposit_and_closes_escrow() {
         .expect("make transaction should submit")
         .assert_success();
 
+    // Advance past the 90-day expiry window; refund is only allowed once
+    // the escrow is expired (see `EscrowNotExpired` guard below).
     ctx.svm.advance_days(199);
 
     // Act
@@ -44,11 +47,16 @@ fn refund_returns_deposit_and_closes_escrow() {
     pretty_log(&result, "refund_returns_deposit_and_closes_escrow");
     // result.print_logs();
     // result.print_logs_structured();
+    // Deposit landed back in the maker's source ATA (the same one drained by
+    // `make`), and both program-owned accounts were torn down.
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, DEPOSIT);
     ctx.svm.assert_account_closed(&bundle.vault);
     ctx.svm.assert_account_closed(&bundle.escrow);
 }
 
+/// Negative path (time-based): a maker cannot pull their funds back early.
+/// `refund` must be rejected with `EscrowNotExpired` while the escrow is
+/// still live, so a maker can't strand a would-be taker mid-flight.
 #[test]
 fn refund_fails_before_expiry() {
     // Arrange
@@ -68,6 +76,9 @@ fn refund_fails_before_expiry() {
         .expect("make transaction should submit")
         .assert_success();
 
+    // Comfortably inside the 90-day window. 19 days is arbitrary; any value
+    // strictly less than 90 would do, but staying well shy of the boundary
+    // keeps this test from accidentally becoming an edge-case test.
     ctx.svm.advance_days(19);
 
     // Act
@@ -86,7 +97,12 @@ fn refund_fails_before_expiry() {
     // result.print_logs_structured();
 }
 
-/// Negative path: with a valid escrow in place, a wrong `maker` must be rejected.
+/// Negative path: with a valid (and expired) escrow in place, a wrong
+/// `maker` must be rejected. We swap a freshly-generated pubkey in for
+/// `maker` while still signing with the real maker (so the signer-as-fee-
+/// payer check passes); the failure should come from
+/// `ConstraintTokenOwner`, fired when Anchor verifies that `maker_ata_a`'s
+/// owner matches the `maker` account passed in.
 #[test]
 fn refund_rejects_wrong_maker() {
     // Arrange
