@@ -316,6 +316,7 @@ name = "anchor-litesvm"
 version = "0.4.0"
 dependencies = [
  "anchor-lang",
+ "anchor-litesvm-derive",
  "base64 0.22.1",
  "borsh",
  "litesvm",
@@ -331,6 +332,15 @@ dependencies = [
  "spl-associated-token-account",
  "spl-token",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "anchor-litesvm-derive"
+version = "0.4.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1761,6 +1771,7 @@ dependencies = [
  "litesvm",
  "litesvm-token",
  "solana-keypair",
+ "solana-message",
  "solana-program",
  "solana-program-pack",
  "solana-signer",

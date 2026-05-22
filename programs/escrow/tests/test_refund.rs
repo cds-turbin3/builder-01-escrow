@@ -2,8 +2,8 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
-use common::{pretty_log, DEPOSIT, RECEIVE, SEED};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers, TransactionHelpers};
+use common::{DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -25,9 +25,7 @@ fn refund_returns_deposit_and_closes_escrow() {
             deposit: DEPOSIT,
         },
     );
-    ctx.execute_instruction(make_ix, &[&maker])
-        .expect("make transaction should submit")
-        .assert_success();
+    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
 
     // Advance past the 90-day expiry window; refund is only allowed once
     // the escrow is expired (see `EscrowNotExpired` guard below).
@@ -38,15 +36,10 @@ fn refund_returns_deposit_and_closes_escrow() {
     let refund_ix = ctx
         .program()
         .build_ix(bundle, escrow::instruction::Refund {});
-    let result = ctx
-        .execute_instruction(refund_ix, &[&maker])
-        .expect("refund transaction should submit");
+    ctx.svm
+        .send_ok(refund_ix, &[&maker], &bundle.aliases())
+        .print_logs_structured(&bundle.aliases());
 
-    // Assert
-    result.assert_success();
-    pretty_log(&result, "refund_returns_deposit_and_closes_escrow");
-    // result.print_logs();
-    // result.print_logs_structured();
     // Deposit landed back in the maker's source ATA (the same one drained by
     // `make`), and both program-owned accounts were torn down.
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, DEPOSIT);
@@ -72,9 +65,7 @@ fn refund_fails_before_expiry() {
             deposit: DEPOSIT,
         },
     );
-    ctx.execute_instruction(make_ix, &[&maker])
-        .expect("make transaction should submit")
-        .assert_success();
+    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
 
     // Comfortably inside the 90-day window. 19 days is arbitrary; any value
     // strictly less than 90 would do, but staying well shy of the boundary
@@ -86,15 +77,9 @@ fn refund_fails_before_expiry() {
     let refund_ix = ctx
         .program()
         .build_ix(bundle, escrow::instruction::Refund {});
-    let result = ctx
-        .execute_instruction(refund_ix, &[&maker])
-        .expect("refund transaction should submit");
-
-    // Assert
-    result.assert_anchor_error("EscrowNotExpired");
-    pretty_log(&result, "refund_fails_before_expiry");
-    // result.print_logs();
-    // result.print_logs_structured();
+    ctx.svm
+        .send_err_named(refund_ix, &[&maker], &bundle.aliases(), "EscrowNotExpired")
+        .print_logs_structured(&bundle.aliases());
 }
 
 /// Negative path: with a valid (and expired) escrow in place, a wrong
@@ -118,9 +103,7 @@ fn refund_rejects_wrong_maker() {
             deposit: DEPOSIT,
         },
     );
-    ctx.execute_instruction(make_ix, &[&maker])
-        .expect("make transaction should submit")
-        .assert_success();
+    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
 
     ctx.svm.advance_days(199);
 
@@ -132,13 +115,12 @@ fn refund_rejects_wrong_maker() {
         .build_ix_with(bundle, escrow::instruction::Refund {}, |a| {
             a.maker = wrong_maker
         });
-    let result = ctx
-        .execute_instruction(refund_ix, &[&maker])
-        .expect("refund transaction should submit");
-    pretty_log(&result, "refund_rejects_wrong_maker");
-    // result.print_logs();
-    // result.print_logs_structured();
-
-    // Assert
-    result.assert_anchor_error("ConstraintTokenOwner");
+    ctx.svm
+        .send_err_named(
+            refund_ix,
+            &[&maker],
+            &bundle.aliases(),
+            "ConstraintTokenOwner",
+        )
+        .print_logs_structured(&bundle.aliases());
 }

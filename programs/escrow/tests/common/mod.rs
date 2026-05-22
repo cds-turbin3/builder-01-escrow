@@ -12,9 +12,8 @@
 
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::solana_program::system_program;
-use anchor_litesvm::TransactionResult;
+use anchor_litesvm::Aliases;
 use anchor_litesvm::{AnchorContext, BuildableIx, Keypair, Signer, TestHelpers};
-use escrow::msg;
 use spl_associated_token_account::get_associated_token_address;
 
 //NOTE higher abstraction - allows tester to model their system and gain
@@ -38,6 +37,25 @@ pub struct EscrowBundle {
     pub associated_token_program: Pubkey,
     pub system_program: Pubkey,
 }
+
+impl EscrowBundle {
+    //NOTE will have to create guidance on how to use this.
+    /// Define aliases for our accounts once.
+    pub fn aliases(self) -> Aliases {
+        Aliases::default() 
+            .with(self.maker, "maker")
+            .with(self.taker, "taker")
+            .with(self.mint_a, "mint_a")
+            .with(self.mint_b, "mint_b")
+            .with(self.maker_ata_a, "maker_ata_a")
+            .with(self.maker_ata_b, "maker_ata_b")
+            .with(self.taker_ata_a, "taker_ata_a")
+            .with(self.taker_ata_b, "taker_ata_b")
+            .with(self.escrow, "escrow")
+            .with(self.vault, "vault")
+    }
+}
+
 
 //NOTE (DX dimension)
 //explain orphan rule -- this likely fits anchor-liteSVM
@@ -183,15 +201,3 @@ pub fn setup(ctx: &mut AnchorContext, seed: u64) -> (EscrowBundle, Keypair, Keyp
     (bundle, maker, taker)
 }
 
-// test helper
-pub fn pretty_log(tx: &TransactionResult, test_name: &str) {
-    msg!("\n\n### {}\n", test_name);
-    // msg!("<details><summary>Logs</summary>\n\n");
-    // msg!("\n```console");
-    // tx.print_logs();
-    // msg!("\n```\n</details>");
-    //
-    msg!("\n```console");
-    tx.print_logs_structured();
-    msg!("\n```\n");
-}

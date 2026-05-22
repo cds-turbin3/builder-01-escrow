@@ -2,8 +2,8 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
-use common::{pretty_log, DEPOSIT, RECEIVE, SEED};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers, TransactionHelpers};
+use common::{DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -27,9 +27,7 @@ fn take_and_close_succeeds_late_in_window() {
             deposit: DEPOSIT,
         },
     );
-    ctx.execute_instruction(make_ix, &[&maker])
-        .expect("make transaction should submit")
-        .assert_success();
+    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
 
     // Act
     // Day 89 of a 90-day window: still inside the allowed range. Picking a
@@ -38,15 +36,10 @@ fn take_and_close_succeeds_late_in_window() {
     ctx.svm.advance_days(89);
 
     let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
-    let result = ctx
-        .execute_instruction(take_ix, &[&taker])
-        .expect("take transaction should submit");
+    ctx.svm
+        .send_ok(take_ix, &[&taker], &bundle.aliases())
+        .print_logs_structured(&bundle.aliases());
 
-    // Assert
-    result.assert_success();
-    pretty_log(&result, "take_swaps_tokens_and_closes_vault");
-    // result.print_logs();
-    // result.print_logs_structured();
     // Taker received the full vault contents; maker received the asking price.
     ctx.svm.assert_token_balance(&bundle.taker_ata_a, DEPOSIT);
     ctx.svm.assert_token_balance(&bundle.maker_ata_b, RECEIVE);
@@ -76,9 +69,7 @@ fn take_and_close_fails_after_expiry() {
             deposit: DEPOSIT,
         },
     );
-    ctx.execute_instruction(make_ix, &[&maker])
-        .expect("make transaction should submit")
-        .assert_success();
+    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
 
     // Act
     // Jump well past the 90-day expiry window; 199 days is arbitrary, the
@@ -86,17 +77,11 @@ fn take_and_close_fails_after_expiry() {
     ctx.svm.advance_days(199);
 
     let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
-    let result = ctx
-        .execute_instruction(take_ix, &[&taker])
-        .expect("take transaction should submit");
-
-    // Assert
     // Specifically `EscrowExpired` (not a generic constraint failure), so a
     // future refactor that "still rejects" but for the wrong reason gets caught.
-    result.assert_anchor_error("EscrowExpired");
-    pretty_log(&result, "take_and_close_fails_after_expiry");
-    // result.print_logs();
-    // result.print_logs_structured();
+    ctx.svm
+        .send_err_named(take_ix, &[&taker], &bundle.aliases(), "EscrowExpired")
+        .print_logs_structured(&bundle.aliases());
 }
 /// Negative path: with a valid escrow in place, a wrong `vault` must be
 /// rejected. We substitute a freshly-generated pubkey for `vault`; since
@@ -120,9 +105,7 @@ fn take_rejects_wrong_vault() {
             deposit: DEPOSIT,
         },
     );
-    ctx.execute_instruction(make_ix, &[&maker])
-        .expect("make transaction should submit")
-        .assert_success();
+    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
     let wrong_vault = Pubkey::new_unique();
 
     // Act
@@ -131,13 +114,7 @@ fn take_rejects_wrong_vault() {
         .build_ix_with(bundle, escrow::instruction::Take {}, |a| {
             a.vault = wrong_vault
         });
-    let result = ctx
-        .execute_instruction(take_ix, &[&taker])
-        .expect("take transaction should submit");
-    pretty_log(&result, "take_rejects_wrong_vault");
-    // result.print_logs();
-    // result.print_logs_structured();
-
-    // Assert
-    result.assert_anchor_error("AccountNotInitialized");
+    ctx.svm
+        .send_err_named(take_ix, &[&taker], &bundle.aliases(), "AccountNotInitialized")
+        .print_logs_structured(&bundle.aliases());
 }

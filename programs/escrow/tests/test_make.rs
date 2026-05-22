@@ -2,8 +2,10 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Program, Pubkey, TransactionResult};
-use common::{pretty_log, EscrowBundle, DEPOSIT, RECEIVE, SEED};
+use anchor_litesvm::{
+    AnchorLiteSVM, AssertionHelpers, Program, Pubkey, TransactionHelpers,
+};
+use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
@@ -75,15 +77,12 @@ fn make_creates_escrow_and_funds_vault() {
             deposit: DEPOSIT,
         },
     );
-    let result = ctx
-        .execute_instruction(ix, &[&maker])
-        .expect("make transaction should submit");
 
-    // Assert
-    result.assert_success();
-    pretty_log(&result, "make_creates_escrow_and_funds_vault");
-    // result.print_logs();
-    // result.print_logs_structured();
+    // ...and ASSERT
+    ctx.svm
+        .send_ok(ix, &[&maker], &bundle.aliases())
+        .print_logs_structured(&bundle.aliases());
+
     // Escrow account was created and populated from the instruction args
     // (every field that round-trips through the program is checked here; if a
     // future change shuffles fields in `state::Escrow`, this fixes the layout
@@ -125,13 +124,8 @@ fn make_rejects_wrong_escrow_pda() {
         },
         |a| a.escrow = wrong_escrow,
     );
-    let result = ctx
-        .execute_instruction(ix, &[&maker])
-        .expect("make transaction should submit");
-    pretty_log(&result, "make_rejects_wrong_escrow_pda");
-    // result.print_logs();
-    // result.print_logs_structured();
-
-    // Assert
-    result.assert_anchor_error("ConstraintSeeds");
+    let aliases = bundle.aliases().with(wrong_escrow, "WrongEscrow");
+    ctx.svm
+        .send_err_named(ix, &[&maker], &aliases, "ConstraintSeeds")
+        .print_logs_structured(&aliases);
 }
