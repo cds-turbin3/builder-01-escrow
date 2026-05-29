@@ -2,7 +2,7 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers, TransactionHelpers};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
 use common::{DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
@@ -13,19 +13,21 @@ const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 #[test]
 fn refund_returns_deposit_and_closes_escrow() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
-    // Arrange: make
-    let make_ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
-    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
 
     // Advance past the 90-day expiry window; refund is only allowed once
     // the escrow is expired (see `EscrowNotExpired` guard below).
@@ -33,13 +35,12 @@ fn refund_returns_deposit_and_closes_escrow() {
 
     // Act
     // `refund` declares no Signer; the maker signs only as the transaction fee payer.
-    let refund_ix = ctx
-        .program()
-        .build_ix(bundle, escrow::instruction::Refund {});
-    ctx.svm
-        .send_ok(refund_ix, &[&maker], &bundle.aliases())
-        .print_logs_structured(&bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(bundle, escrow::instruction::Refund {})
+        .send_ok()
+        .print_logs_structured();
 
+    // Assert
     // Deposit landed back in the maker's source ATA (the same one drained by
     // `make`), and both program-owned accounts were torn down.
     ctx.svm.assert_token_balance(&bundle.maker_ata_a, DEPOSIT);
@@ -53,33 +54,33 @@ fn refund_returns_deposit_and_closes_escrow() {
 #[test]
 fn refund_fails_before_expiry() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
-    // Arrange: make
-    let make_ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
-    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
 
     // Comfortably inside the 90-day window. 19 days is arbitrary; any value
     // strictly less than 90 would do, but staying well shy of the boundary
     // keeps this test from accidentally becoming an edge-case test.
     ctx.svm.advance_days(19);
 
-    // Act
+    // Act + Assert
     // `refund` declares no Signer; the maker signs only as the transaction fee payer.
-    let refund_ix = ctx
-        .program()
-        .build_ix(bundle, escrow::instruction::Refund {});
-    ctx.svm
-        .send_err_named(refund_ix, &[&maker], &bundle.aliases(), "EscrowNotExpired")
-        .print_logs_structured(&bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(bundle, escrow::instruction::Refund {})
+        .send_err_named("EscrowNotExpired")
+        .print_logs_structured();
 }
 
 /// Negative path: with a valid (and expired) escrow in place, a wrong
@@ -91,36 +92,34 @@ fn refund_fails_before_expiry() {
 #[test]
 fn refund_rejects_wrong_maker() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
-    // Arrange: make
-    let make_ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
-    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
 
     ctx.svm.advance_days(199);
 
     let wrong_maker = Pubkey::new_unique();
+    ctx.alias(wrong_maker, "WrongMaker");
 
-    // Act
-    let refund_ix = ctx
-        .program()
-        .build_ix_with(bundle, escrow::instruction::Refund {}, |a| {
-            a.maker = wrong_maker
-        });
-    ctx.svm
-        .send_err_named(
-            refund_ix,
-            &[&maker],
-            &bundle.aliases(),
-            "ConstraintTokenOwner",
+    // Act + Assert
+    ctx.tx(&[&maker])
+        .build_with(
+            bundle,
+            escrow::instruction::Refund {},
+            |a| a.maker = wrong_maker,
         )
-        .print_logs_structured(&bundle.aliases());
+        .send_err_named("ConstraintTokenOwner")
+        .print_logs_structured();
 }

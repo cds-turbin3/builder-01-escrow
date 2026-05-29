@@ -24,8 +24,14 @@ custom-panic = []
 anchor-lang = {version = "1.0.2", features = ["init-if-needed"] }
 anchor-spl = "1.0.0"
 
-[dev-dependencies]
+# Host-only: anchor-litesvm carries the litesvm test machinery which
+# isn't BPF-buildable. The `BundledPubkeys` / `AliasMirror` references in
+# instructions/*.rs are `#[cfg_attr(not(target_os = "solana"), ...)]`
+# gated, so the BPF binary stays clean.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
 anchor-litesvm = { path = "../../../../oss/upstream/anchor-litesvm/crates/anchor-litesvm" }
+
+[dev-dependencies]
 spl-token = { version = "9.0", features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "8.0", features = ["no-entrypoint"] }
 

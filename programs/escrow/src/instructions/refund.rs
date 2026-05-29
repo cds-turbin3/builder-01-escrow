@@ -11,6 +11,11 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 // token_program
 // system program
 
+#[cfg_attr(
+    not(target_os = "solana"),
+    derive(anchor_litesvm::BundledPubkeys),
+    bundled_with(crate::test_helpers::EscrowBundle)
+)]
 #[derive(Accounts)]
 pub struct Refund<'info> {
     #[account(mut)]

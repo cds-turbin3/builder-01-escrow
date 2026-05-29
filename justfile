@@ -6,4 +6,4 @@ t:
 
 tt:
     NO_DNA=1 anchor build
-    cargo test --tests -- --nocapture --test-threads=1
+    ANCHOR_LITESVM_COLOR=1 cargo test --tests -- --nocapture --test-threads=1

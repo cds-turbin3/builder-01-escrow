@@ -1,8 +1,13 @@
 //! Shared test scaffolding for the escrow integration tests.
 //!
-//! Holds the `EscrowBundle` pubkey bundle, the `BuildableIx` glue that pairs
-//! each escrow instruction with its accounts struct, the scenario constants,
-//! and the `setup` fixture that builds a ready-to-use escrow scenario.
+//! The `EscrowBundle` and its `BundledPubkeys` / `AliasMirror` derives
+//! live in `escrow::test_helpers` (the program crate, so the per-ix
+//! `BundledPubkeys` impls on the Accounts structs satisfy the orphan
+//! rule). This module re-exports the bundle so test files keep
+//! importing from `common::EscrowBundle`. What's actually here:
+//! scenario constants and the `setup` fixture that builds a ready-to-
+//! use escrow scenario (funded actors, two mints with distinct
+//! decimals, source ATAs, the escrow PDA, and every derived account).
 
 // NOTE (compilation dimension)
 // This module is compiled into all three test binaries, and not every binary
@@ -10,116 +15,11 @@
 // Silence the resulting per-binary dead-code noise for this scaffolding module.
 #![allow(dead_code)]
 
-use anchor_lang::prelude::Pubkey;
-use anchor_lang::solana_program::system_program;
-use anchor_litesvm::Aliases;
-use anchor_litesvm::{AnchorContext, BuildableIx, Keypair, Signer, TestHelpers};
+use anchor_litesvm::{AnchorContext, Keypair, Signer, TestHelpers};
 use spl_associated_token_account::get_associated_token_address;
 
-//NOTE higher abstraction - allows tester to model their system and gain
-//compile-time type safety
-//
-/// One escrow scenario's worth of pubkeys: the "address book" threaded through
-/// `make`, `take`, and `refund`.
-#[derive(Copy, Clone)]
-pub struct EscrowBundle {
-    pub maker: Pubkey,
-    pub taker: Pubkey,
-    pub mint_a: Pubkey,
-    pub mint_b: Pubkey,
-    pub maker_ata_a: Pubkey,
-    pub maker_ata_b: Pubkey,
-    pub taker_ata_a: Pubkey,
-    pub taker_ata_b: Pubkey,
-    pub escrow: Pubkey,
-    pub vault: Pubkey,
-    pub token_program: Pubkey,
-    pub associated_token_program: Pubkey,
-    pub system_program: Pubkey,
-}
-
-impl EscrowBundle {
-    //NOTE will have to create guidance on how to use this.
-    /// Define aliases for our accounts once.
-    pub fn aliases(self) -> Aliases {
-        Aliases::default() 
-            .with(self.maker, "maker")
-            .with(self.taker, "taker")
-            .with(self.mint_a, "mint_a")
-            .with(self.mint_b, "mint_b")
-            .with(self.maker_ata_a, "maker_ata_a")
-            .with(self.maker_ata_b, "maker_ata_b")
-            .with(self.taker_ata_a, "taker_ata_a")
-            .with(self.taker_ata_b, "taker_ata_b")
-            .with(self.escrow, "escrow")
-            .with(self.vault, "vault")
-    }
-}
-
-
-//NOTE (DX dimension)
-//explain orphan rule -- this likely fits anchor-liteSVM
-//https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence
-impl From<EscrowBundle> for escrow::accounts::Make {
-    fn from(b: EscrowBundle) -> Self {
-        Self {
-            maker: b.maker,
-            mint_a: b.mint_a,
-            mint_b: b.mint_b,
-            maker_ata_a: b.maker_ata_a,
-            escrow: b.escrow,
-            vault: b.vault,
-            token_program: b.token_program,
-            associated_token_program: b.associated_token_program,
-            system_program: b.system_program,
-        }
-    }
-}
-
-impl From<EscrowBundle> for escrow::accounts::Take {
-    fn from(b: EscrowBundle) -> Self {
-        Self {
-            taker: b.taker,
-            maker: b.maker,
-            mint_a: b.mint_a,
-            mint_b: b.mint_b,
-            taker_ata_a: b.taker_ata_a,
-            taker_ata_b: b.taker_ata_b,
-            maker_ata_b: b.maker_ata_b,
-            escrow: b.escrow,
-            vault: b.vault,
-            token_program: b.token_program,
-            associated_token_program: b.associated_token_program,
-            system_program: b.system_program,
-        }
-    }
-}
-
-impl From<EscrowBundle> for escrow::accounts::Refund {
-    fn from(b: EscrowBundle) -> Self {
-        Self {
-            maker: b.maker,
-            mint_a: b.mint_a,
-            maker_ata_a: b.maker_ata_a,
-            escrow: b.escrow,
-            vault: b.vault,
-            token_program: b.token_program,
-            system_program: b.system_program,
-        }
-    }
-}
-
-impl BuildableIx<EscrowBundle> for escrow::instruction::Make {
-    type Accounts = escrow::accounts::Make;
-}
-
-impl BuildableIx<EscrowBundle> for escrow::instruction::Take {
-    type Accounts = escrow::accounts::Take;
-}
-
-impl BuildableIx<EscrowBundle> for escrow::instruction::Refund {
-    type Accounts = escrow::accounts::Refund;
-}
+// Re-exported so tests keep importing from `common::EscrowBundle`.
+pub use escrow::test_helpers::EscrowBundle;
 
 /// Scenario constants. `DEPOSIT != RECEIVE` and the two mints differ in
 /// decimals so the `take` bug (which uses `escrow.receive` and `mint_b.decimals`
@@ -193,9 +93,6 @@ pub fn setup(ctx: &mut AnchorContext, seed: u64) -> (EscrowBundle, Keypair, Keyp
         taker_ata_b,
         escrow,
         vault,
-        token_program: spl_token::id(),
-        associated_token_program: spl_associated_token_account::id(),
-        system_program: system_program::ID,
     };
 
     (bundle, maker, taker)

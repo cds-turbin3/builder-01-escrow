@@ -3,6 +3,9 @@ pub mod error;
 pub mod instructions;
 pub mod state;
 
+#[cfg(not(target_os = "solana"))]
+pub mod test_helpers;
+
 pub use constants::*;
 pub use instructions::*;
 pub use state::*;

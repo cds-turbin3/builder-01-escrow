@@ -1680,9 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "litesvm"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "347d8c652d592c618ac996f2ab21f8c0b0f2da3fbbca227a6887ee61bb75f2de"
+version = "0.12.0"
 dependencies = [
  "agave-feature-set",
  "agave-reserved-account-keys",
@@ -1732,7 +1730,7 @@ dependencies = [
  "solana-svm-log-collector",
  "solana-svm-timings",
  "solana-svm-transaction",
- "solana-system-interface 2.0.0",
+ "solana-system-interface 3.2.0",
  "solana-system-program",
  "solana-sysvar",
  "solana-sysvar-id",
@@ -1743,39 +1741,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "litesvm-token"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6cdb7d678bfa9279f8cb29079c976a4d930c7b30070a9687f4d6d64b528e748"
-dependencies = [
- "litesvm",
- "smallvec",
- "solana-account",
- "solana-address 2.6.0",
- "solana-keypair",
- "solana-program-option",
- "solana-program-pack",
- "solana-rent 3.1.0",
- "solana-signer",
- "solana-system-interface 2.0.0",
- "solana-transaction",
- "solana-transaction-error",
- "spl-associated-token-account-interface",
- "spl-token-interface",
-]
-
-[[package]]
 name = "litesvm-utils"
 version = "0.4.0"
 dependencies = [
+ "indexmap",
  "litesvm",
- "litesvm-token",
  "solana-keypair",
  "solana-message",
  "solana-program",
  "solana-program-pack",
  "solana-signer",
- "solana-system-interface 2.0.0",
+ "solana-system-interface 3.2.0",
  "solana-transaction",
  "spl-associated-token-account",
  "spl-token",

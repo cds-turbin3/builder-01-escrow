@@ -4,6 +4,11 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{close_account, transfer_checked, CloseAccount, TransferChecked};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
+#[cfg_attr(
+    not(target_os = "solana"),
+    derive(anchor_litesvm::BundledPubkeys),
+    bundled_with(crate::test_helpers::EscrowBundle)
+)]
 #[derive(Accounts)]
 pub struct Take<'info> {
     #[account(mut)]

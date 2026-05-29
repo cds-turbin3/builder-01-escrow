@@ -2,87 +2,33 @@
 
 mod common;
 
-use anchor_litesvm::{
-    AnchorLiteSVM, AssertionHelpers, Program, Pubkey, TransactionHelpers,
-};
-use common::{EscrowBundle, DEPOSIT, RECEIVE, SEED};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey};
+use common::{DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
-
-/// Regression guard: each `BuildableIx` impl pairs its args struct with the
-/// correct `accounts::*` struct. A wrong `type Accounts =` on any of the three
-/// impls would still compile (every `From<EscrowBundle> for accounts::*` exists,
-/// so the type wiring stays valid) but would produce an instruction with the
-/// wrong account count, caught here. Uses fresh pubkeys rather than the `setup`
-/// fixture because we're inspecting the instruction shape, not executing it.
-#[test]
-fn buildable_ix_resolves_correct_accounts_struct() {
-    let bundle = EscrowBundle {
-        maker: Pubkey::new_unique(),
-        taker: Pubkey::new_unique(),
-        mint_a: Pubkey::new_unique(),
-        mint_b: Pubkey::new_unique(),
-        maker_ata_a: Pubkey::new_unique(),
-        maker_ata_b: Pubkey::new_unique(),
-        taker_ata_a: Pubkey::new_unique(),
-        taker_ata_b: Pubkey::new_unique(),
-        escrow: Pubkey::new_unique(),
-        vault: Pubkey::new_unique(),
-        token_program: Pubkey::new_unique(),
-        associated_token_program: Pubkey::new_unique(),
-        system_program: Pubkey::new_unique(),
-    };
-    let program = Program::new(escrow::ID);
-
-    let make_ix = program.build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: 1,
-            receive: 2,
-            deposit: 3,
-        },
-    );
-    let take_ix = program.build_ix(bundle, escrow::instruction::Take {});
-    let refund_ix = program.build_ix(bundle, escrow::instruction::Refund {});
-
-    // TODO: this guard relies on account *count* as a proxy for "right
-    // accounts struct was selected"; a future refactor that happens to keep
-    // the counts equal would slip past it. A stronger check would compare the
-    // metas (pubkey + is_signer + is_writable) against a known-good fixture
-    // per instruction.
-    //
-    // The counts below are the expected number of AccountMetas Anchor emits
-    // for each Accounts struct (signer + named accounts + programs).
-    // Make: maker, mint_a, mint_b, maker_ata_a, escrow, vault, token_program, ata_program, system_program
-    assert_eq!(make_ix.accounts.len(), 9);
-    // Take: taker, maker, mint_a, mint_b, taker_ata_a, taker_ata_b, maker_ata_b, escrow, vault, token_program, ata_program, system_program
-    assert_eq!(take_ix.accounts.len(), 12);
-    // Refund: maker, mint_a, maker_ata_a, escrow, vault, token_program, system_program
-    assert_eq!(refund_ix.accounts.len(), 7);
-}
 
 /// Happy path: `make` creates the escrow account and moves the deposit into the vault.
 #[test]
 fn make_creates_escrow_and_funds_vault() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
     // Act
-    let ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
 
-    // ...and ASSERT
-    ctx.svm
-        .send_ok(ix, &[&maker], &bundle.aliases())
-        .print_logs_structured(&bundle.aliases());
-
+    // Assert
     // Escrow account was created and populated from the instruction args
     // (every field that round-trips through the program is checked here; if a
     // future change shuffles fields in `state::Escrow`, this fixes the layout
@@ -110,22 +56,25 @@ fn make_creates_escrow_and_funds_vault() {
 #[test]
 fn make_rejects_wrong_escrow_pda() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, _taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
     let wrong_escrow = Pubkey::new_unique();
+    ctx.alias(wrong_escrow, "WrongEscrow");
 
-    // Act
-    let ix = ctx.program().build_ix_with(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-        |a| a.escrow = wrong_escrow,
-    );
-    let aliases = bundle.aliases().with(wrong_escrow, "WrongEscrow");
-    ctx.svm
-        .send_err_named(ix, &[&maker], &aliases, "ConstraintSeeds")
-        .print_logs_structured(&aliases);
+    // Act + Assert: `send_err_named` is the assertion. It panics if the
+    // transaction succeeds or fails with anything other than a
+    // `ConstraintSeeds` error.
+    ctx.tx(&[&maker])
+        .build_with(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+            |a| a.escrow = wrong_escrow,
+        )
+        .send_err_named("ConstraintSeeds")
+        .print_logs_structured();
 }

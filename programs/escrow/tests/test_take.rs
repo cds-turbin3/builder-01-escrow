@@ -2,7 +2,7 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers, TransactionHelpers};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
 use common::{DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
@@ -15,31 +15,35 @@ const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 #[test]
 fn take_and_close_succeeds_late_in_window() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
-    // Arrange: make (the escrow must exist and be funded before it can be taken)
-    let make_ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
-    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
+    // The escrow must exist and be funded before it can be taken.
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
 
-    // Act
     // Day 89 of a 90-day window: still inside the allowed range. Picking a
     // value this close to the edge guards against an off-by-one in the
     // expiry check (`< expiry` vs `<= expiry`).
     ctx.svm.advance_days(89);
 
-    let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
-    ctx.svm
-        .send_ok(take_ix, &[&taker], &bundle.aliases())
-        .print_logs_structured(&bundle.aliases());
+    // Act
+    ctx.tx(&[&taker])
+        .build(bundle, escrow::instruction::Take {})
+        .send_ok()
+        .print_logs_structured();
 
+    // Assert
     // Taker received the full vault contents; maker received the asking price.
     ctx.svm.assert_token_balance(&bundle.taker_ata_a, DEPOSIT);
     ctx.svm.assert_token_balance(&bundle.maker_ata_b, RECEIVE);
@@ -57,32 +61,35 @@ fn take_and_close_succeeds_late_in_window() {
 #[test]
 fn take_and_close_fails_after_expiry() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
-    // Arrange: make (the escrow must exist and be funded before it can be taken)
-    let make_ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
-    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
 
-    // Act
     // Jump well past the 90-day expiry window; 199 days is arbitrary, the
     // point is "definitely expired" (any value > 90 would do).
     ctx.svm.advance_days(199);
 
-    let take_ix = ctx.program().build_ix(bundle, escrow::instruction::Take {});
-    // Specifically `EscrowExpired` (not a generic constraint failure), so a
-    // future refactor that "still rejects" but for the wrong reason gets caught.
-    ctx.svm
-        .send_err_named(take_ix, &[&taker], &bundle.aliases(), "EscrowExpired")
-        .print_logs_structured(&bundle.aliases());
+    // Act + Assert: specifically `EscrowExpired` (not a generic constraint
+    // failure), so a future refactor that "still rejects" but for the wrong
+    // reason gets caught.
+    ctx.tx(&[&taker])
+        .build(bundle, escrow::instruction::Take {})
+        .send_err_named("EscrowExpired")
+        .print_logs_structured();
 }
+
 /// Negative path: with a valid escrow in place, a wrong `vault` must be
 /// rejected. We substitute a freshly-generated pubkey for `vault`; since
 /// nothing was ever initialized at that address, Anchor's account check fires
@@ -93,28 +100,32 @@ fn take_and_close_fails_after_expiry() {
 #[test]
 fn take_rejects_wrong_vault() {
     // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, PROGRAM_SO);
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
     let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
+    bundle.alias_all(&mut ctx);
 
-    // Arrange: make
-    let make_ix = ctx.program().build_ix(
-        bundle,
-        escrow::instruction::Make {
-            seed: SEED,
-            receive: RECEIVE,
-            deposit: DEPOSIT,
-        },
-    );
-    ctx.svm.send_ok(make_ix, &[&maker], &bundle.aliases());
+    ctx.tx(&[&maker])
+        .build(
+            bundle,
+            escrow::instruction::Make {
+                seed: SEED,
+                receive: RECEIVE,
+                deposit: DEPOSIT,
+            },
+        )
+        .send_ok()
+        .print_logs_structured();
+
     let wrong_vault = Pubkey::new_unique();
+    ctx.alias(wrong_vault, "WrongVault");
 
-    // Act
-    let take_ix = ctx
-        .program()
-        .build_ix_with(bundle, escrow::instruction::Take {}, |a| {
-            a.vault = wrong_vault
-        });
-    ctx.svm
-        .send_err_named(take_ix, &[&taker], &bundle.aliases(), "AccountNotInitialized")
-        .print_logs_structured(&bundle.aliases());
+    // Act + Assert
+    ctx.tx(&[&taker])
+        .build_with(
+            bundle,
+            escrow::instruction::Take {},
+            |a| a.vault = wrong_vault,
+        )
+        .send_err_named("AccountNotInitialized")
+        .print_logs_structured();
 }
