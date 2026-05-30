@@ -1,117 +1,138 @@
-//! Integration tests for the escrow `take` instruction, built via `BuildableIx`.
+//! Integration tests for the escrow `take` instruction.
+//!
+//! `take` is the settlement: the taker sends `escrow.receive` of mint_b to the
+//! maker, and in return the vault's full mint_a balance is released to the
+//! taker; the vault then closes (rent back to the maker). `take` is gated by a
+//! 90-day expiry window, so these tests exercise the time-warp feature
+//! (`advance_days`) to land on both sides of the boundary.
+//!
+//! Each test threads a [`Report`]; the Markdown lands in
+//! `target/md-reports/<slug>.md`.
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
-use common::{DEPOSIT, RECEIVE, SEED};
+use anchor_litesvm::{AnchorLiteSVM, MarkdownBlock, Pubkey, Report, TestHelpers};
+use common::{balances, setup, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
 
-/// Happy path: after `take`, the taker should hold the whole vault
-/// (`DEPOSIT` of mint_a), the maker should hold the asking price (`RECEIVE` of
-/// mint_b), and the vault should be closed. Runs at day 89 so we also prove
-/// the boundary case: `take` is still allowed on the last day of the 90-day
-/// expiry window (see `EXPIRY_PERIOD_IN_SECONDS`).
+/// Happy path, run at day 89: the taker receives the whole vault (`DEPOSIT` of
+/// mint_a), the maker receives the asking price (`RECEIVE` of mint_b), and the
+/// vault closes. Day 89 of a 90-day window is deliberate: it pins the boundary
+/// (`< expiry` vs `<= expiry`) so an off-by-one in the expiry check is caught.
 #[test]
 fn take_and_close_succeeds_late_in_window() {
-    // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
-    let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
-    bundle.alias_all(&mut ctx);
+    let mut md = Report::new(
+        "Escrow: take settles the swap on the last day of the window",
+        "With an open escrow, the taker calls take: they pay `receive` of mint_b \
+         to the maker and receive the vault's full mint_a deposit; the vault then \
+         closes. Run at day 89 of the 90-day window to pin the expiry boundary: \
+         take is still allowed on the last day.",
+    );
 
-    // The escrow must exist and be funded before it can be taken.
-    ctx.tx(&[&maker])
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
+    let w = setup(&mut ctx, SEED);
+
+    md.step("Setup: maker opens the escrow (make funds the vault)");
+    ctx.tx(&[&w.maker])
         .build(
-            bundle,
-            escrow::instruction::Make {
-                seed: SEED,
-                receive: RECEIVE,
-                deposit: DEPOSIT,
-            },
+            w.bundle,
+            escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
         )
         .send_ok()
         .print_markdown_pair();
+    md.snapshot("after make", &balances(&ctx, &w));
 
-    // Day 89 of a 90-day window: still inside the allowed range. Picking a
-    // value this close to the edge guards against an off-by-one in the
-    // expiry check (`< expiry` vs `<= expiry`).
+    md.step("Advance to day 89 (still inside the 90-day window)");
+    md.note("Picking a value one day short of expiry guards against an off-by-one in the `< expiry` check.");
     ctx.svm.advance_days(89);
 
-    // Act
-    ctx.tx(&[&taker])
-        .build(bundle, escrow::instruction::Take {})
+    md.step("Action: taker calls take");
+    ctx.tx(&[&w.taker])
+        .build(w.bundle, escrow::instruction::Take {})
         .send_ok()
         .print_markdown_pair();
 
-    // Assert
-    // Taker received the full vault contents; maker received the asking price.
-    ctx.svm.assert_token_balance(&bundle.taker_ata_a, DEPOSIT);
-    ctx.svm.assert_token_balance(&bundle.maker_ata_b, RECEIVE);
-    // Taker's mint_b ATA drained to zero (they spent the full RECEIVE amount,
-    // which is exactly what `setup` minted into it).
-    ctx.svm.assert_token_balance(&bundle.taker_ata_b, 0);
-    // Vault account closed; lamports returned to the maker by Anchor's
-    // `close = maker` constraint on the vault.
-    ctx.svm.assert_account_closed(&bundle.vault);
+    md.step("After: the two-sided swap settled; vault closed");
+    md.snapshot("after take", &balances(&ctx, &w));
+    md.check("taker received the deposit (mint_a)", Some(DEPOSIT), ctx.svm.token_balance(&w.bundle.taker_ata_a));
+    md.check("maker received the price (mint_b)", Some(RECEIVE), ctx.svm.token_balance(&w.bundle.maker_ata_b));
+    md.check("taker's mint_b fully spent", Some(0), ctx.svm.token_balance(&w.bundle.taker_ata_b));
+    md.check("vault account closed", false, ctx.account_exists(&w.bundle.vault));
+
+    // The authority story across both sends: makers and takers sign their own
+    // inbound transfers, the Escrow PDA signs the vault release and close via
+    // invoke_signed. And the account index: the standing structure of every
+    // account the swap touched, classified by owner and authority.
+    md.authority(&ctx.authority_story());
+    md.block("account index", ctx.account_index());
 }
 
-/// Negative path (time-based): once the escrow has expired, `take` must be
-/// rejected with `EscrowExpired`. The maker's recourse after expiry is
-/// `refund`, not someone else's `take`.
+/// Negative (time-based): once the escrow has expired, `take` must be rejected
+/// with `EscrowExpired`. The maker's recourse after expiry is `refund`, not
+/// someone else's `take`.
 #[test]
 fn take_and_close_fails_after_expiry() {
-    // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
-    let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
-    bundle.alias_all(&mut ctx);
+    let mut md = Report::new(
+        "Escrow: take is rejected after the escrow expires",
+        "Past the 90-day window the offer is dead: take must fail with \
+         EscrowExpired (not a generic constraint error), so a refactor that \
+         still rejects but for the wrong reason is caught. After expiry the \
+         maker's path is refund, not a taker's take.",
+    );
 
-    ctx.tx(&[&maker])
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
+    let w = setup(&mut ctx, SEED);
+
+    md.step("Setup: maker opens the escrow");
+    ctx.tx(&[&w.maker])
         .build(
-            bundle,
-            escrow::instruction::Make {
-                seed: SEED,
-                receive: RECEIVE,
-                deposit: DEPOSIT,
-            },
+            w.bundle,
+            escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
         )
         .send_ok()
         .print_markdown_pair();
 
-    // Jump well past the 90-day expiry window; 199 days is arbitrary, the
-    // point is "definitely expired" (any value > 90 would do).
+    md.step("Advance 199 days (definitely past the 90-day window)");
     ctx.svm.advance_days(199);
 
-    // Act + Assert: specifically `EscrowExpired` (not a generic constraint
-    // failure), so a future refactor that "still rejects" but for the wrong
-    // reason gets caught.
-    ctx.tx(&[&taker])
-        .build(bundle, escrow::instruction::Take {})
-        .send_err_named("EscrowExpired")
-        .print_markdown_pair();
+    md.step("Action: taker calls take on the expired escrow → must fail");
+    let rejection = ctx
+        .tx(&[&w.taker])
+        .build(w.bundle, escrow::instruction::Take {})
+        .send_err_named("EscrowExpired");
+    md.block(
+        "rejection logs",
+        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+    );
+
+    md.step("After: nothing settled; the deposit is still in the vault");
+    md.snapshot("balances", &balances(&ctx, &w));
+    md.check("vault still holds the deposit", Some(DEPOSIT), ctx.svm.token_balance(&w.bundle.vault));
+    md.check("escrow account still open", true, ctx.account_exists(&w.bundle.escrow));
 }
 
-/// Negative path: with a valid escrow in place, a wrong `vault` must be
-/// rejected. We substitute a freshly-generated pubkey for `vault`; since
-/// nothing was ever initialized at that address, Anchor's account check fires
-/// with `AccountNotInitialized` before we get anywhere near the transfer.
-/// (A different swap, e.g. an existing-but-wrong token account, would
-/// surface a different error such as a constraint or owner mismatch; the
-/// specific error matters because it identifies *which* guard caught us.)
+/// Negative: a wrong `vault` must be rejected. We substitute a fresh pubkey;
+/// since nothing was initialized at that address, Anchor's account check fires
+/// `AccountNotInitialized` before reaching the transfer. The specific error
+/// identifies *which* guard caught us.
 #[test]
 fn take_rejects_wrong_vault() {
-    // Arrange
-    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
-    let (bundle, maker, taker) = common::setup(&mut ctx, SEED);
-    bundle.alias_all(&mut ctx);
+    let mut md = Report::new(
+        "Escrow: take rejects a wrong vault account",
+        "Substituting an uninitialized pubkey for the vault must fail with \
+         AccountNotInitialized (Anchor's account check), before any transfer. \
+         The specific error name matters: it pins which guard fired.",
+    );
 
-    ctx.tx(&[&maker])
+    let mut ctx = AnchorLiteSVM::build_with_program(escrow::ID, "escrow", PROGRAM_SO);
+    let w = setup(&mut ctx, SEED);
+
+    md.step("Setup: maker opens the escrow");
+    ctx.tx(&[&w.maker])
         .build(
-            bundle,
-            escrow::instruction::Make {
-                seed: SEED,
-                receive: RECEIVE,
-                deposit: DEPOSIT,
-            },
+            w.bundle,
+            escrow::instruction::Make { seed: SEED, receive: RECEIVE, deposit: DEPOSIT },
         )
         .send_ok()
         .print_markdown_pair();
@@ -119,13 +140,16 @@ fn take_rejects_wrong_vault() {
     let wrong_vault = Pubkey::new_unique();
     ctx.alias(wrong_vault, "WrongVault");
 
-    // Act + Assert
-    ctx.tx(&[&taker])
-        .build_with(
-            bundle,
-            escrow::instruction::Take {},
-            |a| a.vault = wrong_vault,
-        )
-        .send_err_named("AccountNotInitialized")
-        .print_markdown_pair();
+    md.step("Action: taker calls take with an uninitialized vault → must fail");
+    let rejection = ctx
+        .tx(&[&w.taker])
+        .build_with(w.bundle, escrow::instruction::Take {}, |a| a.vault = wrong_vault)
+        .send_err_named("AccountNotInitialized");
+    md.block(
+        "rejection logs",
+        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+    );
+
+    md.step("After: the real escrow and vault are intact");
+    md.check("vault still holds the deposit", Some(DEPOSIT), ctx.svm.token_balance(&w.bundle.vault));
 }

@@ -1285,7 +1285,6 @@ dependencies = [
  "anchor-litesvm",
  "anchor-spl",
  "spl-associated-token-account",
- "spl-token",
 ]
 
 [[package]]
@@ -1746,13 +1745,16 @@ version = "0.4.0"
 dependencies = [
  "indexmap",
  "litesvm",
+ "solana-account",
  "solana-keypair",
  "solana-message",
  "solana-program",
  "solana-program-pack",
+ "solana-program-runtime",
  "solana-signer",
  "solana-system-interface 3.2.0",
  "solana-transaction",
+ "solana-transaction-context",
  "spl-associated-token-account",
  "spl-token",
  "thiserror 2.0.18",

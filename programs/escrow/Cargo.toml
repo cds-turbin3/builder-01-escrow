@@ -31,8 +31,13 @@ anchor-spl = "1.0.0"
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 anchor-litesvm = { path = "../../../../oss/upstream/anchor-litesvm/crates/anchor-litesvm" }
 
+# Most test types (Keypair, Pubkey, Signer, the harness, Report, ActorRegistry,
+# deterministic keypairs) come through the `anchor-litesvm` facade. The one thing
+# it does not expose is *pure* ATA derivation (it only offers
+# `create_associated_token_account`, which creates), so we keep a direct dep on
+# spl-associated-token-account to derive the vault and init-if-needed ATAs before
+# the program creates them. (Candidate to hoist as `TestHelpers::ata(owner, mint)`.)
 [dev-dependencies]
-spl-token = { version = "9.0", features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "8.0", features = ["no-entrypoint"] }
 
 

@@ -1,15 +1,23 @@
 //! Bundle + alias registration for escrow integration tests.
 //! Host-only; never reaches the BPF binary.
 //!
-//! `AliasMirror` emits `Self::alias_all(&self, ctx)` that registers every
-//! `Pubkey` field with a PascalCase label derived from the field name. So
-//! `bundle.alias_all(&mut ctx)` once per test seeds the alias table that
-//! the structured-log printer reads.
+//! Three derives stack here, each carrying one job; how they stitch together
+//! with the per-instruction `BundledPubkeys` projections is written up in
+//! `docs/testing/derive-scaffolding.md`. In short:
+//!
+//! - `AliasMirror` emits `Self::alias_all(&self, ctx)`, registering every
+//!   `Pubkey` field under a PascalCase label (`MakerAtaA`). The suite aliases
+//!   canonically in `setup()` (`Maker/A`, `Escrow/A`, ... via `alias_ata`)
+//!   instead, so `alias_all` is generated but unused here.
+//! - `Bundle` emits a `Default` that seeds every field with a fresh
+//!   `Pubkey::new_unique()`, so `..EscrowBundle::default()` lets a test pin only
+//!   the fields a given instruction actually projects and leave the rest as
+//!   throwaway placeholders.
 
 use anchor_lang::prelude::Pubkey;
-use anchor_litesvm::AliasMirror;
+use anchor_litesvm::{AliasMirror, Bundle};
 
-#[derive(Copy, Clone, Debug, AliasMirror)]
+#[derive(Copy, Clone, Debug, AliasMirror, Bundle)]
 pub struct EscrowBundle {
     pub maker: Pubkey,
     pub taker: Pubkey,
