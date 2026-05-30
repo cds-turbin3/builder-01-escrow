@@ -27,7 +27,7 @@ fn refund_returns_deposit_and_closes_escrow() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Advance past the 90-day expiry window; refund is only allowed once
     // the escrow is expired (see `EscrowNotExpired` guard below).
@@ -38,7 +38,7 @@ fn refund_returns_deposit_and_closes_escrow() {
     ctx.tx(&[&maker])
         .build(bundle, escrow::instruction::Refund {})
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Assert
     // Deposit landed back in the maker's source ATA (the same one drained by
@@ -68,7 +68,7 @@ fn refund_fails_before_expiry() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Comfortably inside the 90-day window. 19 days is arbitrary; any value
     // strictly less than 90 would do, but staying well shy of the boundary
@@ -80,7 +80,7 @@ fn refund_fails_before_expiry() {
     ctx.tx(&[&maker])
         .build(bundle, escrow::instruction::Refund {})
         .send_err_named("EscrowNotExpired")
-        .print_logs_structured();
+        .print_markdown_pair();
 }
 
 /// Negative path: with a valid (and expired) escrow in place, a wrong
@@ -106,7 +106,7 @@ fn refund_rejects_wrong_maker() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     ctx.svm.advance_days(199);
 
@@ -121,5 +121,5 @@ fn refund_rejects_wrong_maker() {
             |a| a.maker = wrong_maker,
         )
         .send_err_named("ConstraintTokenOwner")
-        .print_logs_structured();
+        .print_markdown_pair();
 }

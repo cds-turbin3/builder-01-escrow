@@ -26,7 +26,7 @@ fn make_creates_escrow_and_funds_vault() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Assert
     // Escrow account was created and populated from the instruction args
@@ -76,5 +76,5 @@ fn make_rejects_wrong_escrow_pda() {
             |a| a.escrow = wrong_escrow,
         )
         .send_err_named("ConstraintSeeds")
-        .print_logs_structured();
+        .print_markdown_pair();
 }

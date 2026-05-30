@@ -30,7 +30,7 @@ fn take_and_close_succeeds_late_in_window() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Day 89 of a 90-day window: still inside the allowed range. Picking a
     // value this close to the edge guards against an off-by-one in the
@@ -41,7 +41,7 @@ fn take_and_close_succeeds_late_in_window() {
     ctx.tx(&[&taker])
         .build(bundle, escrow::instruction::Take {})
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Assert
     // Taker received the full vault contents; maker received the asking price.
@@ -75,7 +75,7 @@ fn take_and_close_fails_after_expiry() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     // Jump well past the 90-day expiry window; 199 days is arbitrary, the
     // point is "definitely expired" (any value > 90 would do).
@@ -87,7 +87,7 @@ fn take_and_close_fails_after_expiry() {
     ctx.tx(&[&taker])
         .build(bundle, escrow::instruction::Take {})
         .send_err_named("EscrowExpired")
-        .print_logs_structured();
+        .print_markdown_pair();
 }
 
 /// Negative path: with a valid escrow in place, a wrong `vault` must be
@@ -114,7 +114,7 @@ fn take_rejects_wrong_vault() {
             },
         )
         .send_ok()
-        .print_logs_structured();
+        .print_markdown_pair();
 
     let wrong_vault = Pubkey::new_unique();
     ctx.alias(wrong_vault, "WrongVault");
@@ -127,5 +127,5 @@ fn take_rejects_wrong_vault() {
             |a| a.vault = wrong_vault,
         )
         .send_err_named("AccountNotInitialized")
-        .print_logs_structured();
+        .print_markdown_pair();
 }
