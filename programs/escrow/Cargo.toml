@@ -29,7 +29,7 @@ anchor-spl = "1.0.0"
 # instructions/*.rs are `#[cfg_attr(not(target_os = "solana"), ...)]`
 # gated, so the BPF binary stays clean.
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-anchor-litesvm = { path = "../../../../oss/upstream/anchor-litesvm/crates/anchor-litesvm" }
+anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "main" }
 
 # Most test types (Keypair, Pubkey, Signer, the harness, Report, ActorRegistry,
 # deterministic keypairs) come through the `anchor-litesvm` facade. The one thing
