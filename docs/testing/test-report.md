@@ -56,13 +56,13 @@ recorder and concatenated in sorted order. Regenerate with `just test-md`.
 
 ── escrow::Make ────────────────────────────────────────────
 Transaction  signers=[Maker]
-└── escrow::Make [1] ✗ 9498cu  signer=Maker
+└── escrow::Make [1] ✗ 7998cu  signer=Maker
     └── Error: ConstraintSeeds
 Error: InstructionError(0, Custom(2006))
-Compute Units (this run): 9498
+Compute Units (this run): 7998
 Fee: 5000 lamports
 Legend (2):
-  escrow = H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o
+  escrow = 4iTshPQzLB9YstwVKJuHqd1UDMQpWRmE3NWeuNt7MrRt
   Maker  = yUt2uGHDQTGniin6H4ickJPe5UAWbnE68MVy58Mx4ea
 ```
 
@@ -104,7 +104,7 @@ Error: InstructionError(0, Custom(6001))
 Compute Units (this run): 11860
 Fee: 5000 lamports
 Legend (2):
-  escrow = H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o
+  escrow = 4iTshPQzLB9YstwVKJuHqd1UDMQpWRmE3NWeuNt7MrRt
   Maker  = yUt2uGHDQTGniin6H4ickJPe5UAWbnE68MVy58Mx4ea
 ```
 
@@ -173,7 +173,7 @@ Error: InstructionError(0, Custom(2015))
 Compute Units (this run): 7552
 Fee: 5000 lamports
 Legend (2):
-  escrow = H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o
+  escrow = 4iTshPQzLB9YstwVKJuHqd1UDMQpWRmE3NWeuNt7MrRt
   Maker  = yUt2uGHDQTGniin6H4ickJPe5UAWbnE68MVy58Mx4ea
 ```
 
@@ -256,7 +256,7 @@ Error: InstructionError(0, Custom(6000))
 Compute Units (this run): 79772
 Fee: 5000 lamports
 Legend (2):
-  escrow = H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o
+  escrow = 4iTshPQzLB9YstwVKJuHqd1UDMQpWRmE3NWeuNt7MrRt
   Taker  = E2ZkB8SbR5tiUsYJydh1Q7aDgESTSctJQwoyb8deX9gM
 ```
 
@@ -297,7 +297,7 @@ Error: InstructionError(0, Custom(3012))
 Compute Units (this run): 7050
 Fee: 5000 lamports
 Legend (2):
-  escrow = H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o
+  escrow = 4iTshPQzLB9YstwVKJuHqd1UDMQpWRmE3NWeuNt7MrRt
   Taker  = E2ZkB8SbR5tiUsYJydh1Q7aDgESTSctJQwoyb8deX9gM
 ```
 
@@ -346,28 +346,7 @@ Picking a value one day short of expiry guards against an off-by-one in the `< e
 - [x] taker's mint_b fully spent: `Some(0)`
 - [x] vault account closed: `false`
 
-**account index**
-
-```text
-Maker  (human signer, owned by System)
-  ├── Maker/A  (ATA · mint A)
-  └── Maker/B  (ATA · mint B)
-Taker  (human signer, owned by System)
-  ├── Taker/A  (ATA · mint A)
-  └── Taker/B  (ATA · mint B)
-Escrow  (program-signed, owned by escrow)
-  └── Escrow/A  (ATA · mint A)
-A  (passive, owned by Token)
-B  (passive, owned by Token)
-
-── programs ──
-System  (owns Maker, Taker)
-Token  (owns 7 accounts)
-escrow  (owns Escrow)
-AssociatedToken  (derived 5 ATA edges)
-```
-
-### Authority flow
+**Authority flow**
 
 ```mermaid
 sequenceDiagram
@@ -388,6 +367,27 @@ sequenceDiagram
     Taker ->> Taker_B: Token::TransferChecked ✓
     Taker ->> Maker_B: Token::TransferChecked ✓
     Escrow ->> Taker_A: Token::TransferChecked ✓
+```
+
+**account index**
+
+```text
+Maker  (human signer, owned by System)
+  ├── Maker/A  (ATA · mint A)
+  └── Maker/B  (ATA · mint B)
+Taker  (human signer, owned by System)
+  ├── Taker/A  (ATA · mint A)
+  └── Taker/B  (ATA · mint B)
+Escrow  (program-signed, owned by escrow)
+  └── Escrow/A  (ATA · mint A)
+A  (passive, owned by Token)
+B  (passive, owned by Token)
+
+── programs ──
+System  (owns Maker, Taker)
+Token  (owns 7 accounts)
+escrow  (owns Escrow)
+AssociatedToken  (derived 5 ATA edges)
 ```
 
 ---
